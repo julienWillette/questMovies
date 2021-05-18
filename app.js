@@ -42,22 +42,6 @@ app.get("/api/movies", (req, res) => {
   });
 });
 
-app.get("/api/users", (req, res) => {
-  let sql = 'SELECT * FROM users';
-  const sqlValues = [];
-  if (req.query.language) {
-    sql += ' WHERE language = ?';
-    sqlValues.push(req.query.language);
-  }
-  connection.query(sql, sqlValues, (err, results) =>{
-    if (err) {
-      res.status(500).send("Error retrieving data from database");
-    } else {
-      res.status(200).json(results);
-    }
-  });
-});
-
 app.get("/api/movies/:id", (req, res) => {
   const movieId = req.params.id;
   connection.query(
@@ -83,27 +67,33 @@ app.post("/api/movies", (req, res) => {
       if (err) {
         res.status(500).send("Error saving the movie");
       } else {
-        res.status(201).send("Movie successfully saved");
+        const id = result.insertId;
+        const createMovie ={ id, title, director, year, color, duration }
+        res.status(201).json(createMovie);
       }
     }
   );
 });
 
-app.put("/api/movies/:id", (req, res) => {
+app.put('/api/movies/:id', (req, res) => {
   const movieId = req.params.id;
-  const moviePropsToUpdate = req.body;
-  connection.query(
-    "UPDATE movies SET ? WHERE id = ?",
-    [moviePropsToUpdate, movieId],
-    (err) => {
-      if (err) {
-        console.log(err);
-        res.status(500).send("Error updating a movie");
-      } else {
-        res.status(200).send("Movie updated successfully 🎉");
-      }
-    }
-  );
+  const db = connection.promise();
+  let existingMovie = null;
+  db.query('SELECT * FROM movies WHERE id = ?', [movieId])
+    .then(([results]) => {
+      existingMovie= results[0];
+      if (!existingMovie) return Promise.reject('RECORD_NOT_FOUND');
+      return db.query('UPDATE movies SET ? WHERE id = ?', [req.body, movieId]);
+    })
+    .then(() => {
+      res.status(200).json({ ...existingMovie, ...req.body });
+    })
+    .catch((err) => {
+      console.error(err);
+      if (err === 'RECORD_NOT_FOUND')
+        res.status(404).send(`User with id ${movieId} not found.`);
+      else res.status(500).send('Error updating a user');
+    });
 });
 
 app.delete("/api/movies/:id", (req, res) => {
@@ -154,40 +144,43 @@ app.get("/api/users/:id", (req, res) => {
   );
 });
 
-app.post("/api/users", (req, res) => {
+app.post('/api/users', (req, res) => {
   const { firstname, lastname, email } = req.body;
   connection.query(
-    "INSERT INTO users(firstname, lastname, email) VALUES (?, ?, ?)",
+    'INSERT INTO users (firstname, lastname, email) VALUES (?, ?, ?)',
     [firstname, lastname, email],
     (err, result) => {
       if (err) {
-        res.status(500).send("Error saving the user");
+        console.error(err);
+        res.status(500).send('Error saving the user');
       } else {
-        res.status(201).send("User successfully saved");
+        const id = result.insertId;
+        const createdUser = { id, firstname, lastname, email };
+        res.status(201).json(createdUser);
       }
     }
   );
 });
 
-app.put("/api/users/:id", (req, res) => {
-  // We get the ID from the url path :
+app.put('/api/users/:id', (req, res) => {
   const userId = req.params.id;
-  // We get the new attribute values for the user from req.body
-  const userPropsToUpdate = req.body;
-  // We send a UPDATE query to the DB
-  connection.query(
-    "UPDATE users SET ? WHERE id = ?",
-    [userPropsToUpdate, userId],
-    (err) => {
-      // Once the DB operation is over, we can respond to the HTTP request
-      if (err) {
-        console.log(err);
-        res.status(500).send("Error updating a user");
-      } else {
-        res.status(200).send("User updated successfully 🎉");
-      }
-    }
-  );
+  const db = connection.promise();
+  let existingUser = null;
+  db.query('SELECT * FROM users WHERE id = ?', [userId])
+    .then(([results]) => {
+      existingUser = results[0];
+      if (!existingUser) return Promise.reject('RECORD_NOT_FOUND');
+      return db.query('UPDATE users SET ? WHERE id = ?', [req.body, userId]);
+    })
+    .then(() => {
+      res.status(200).json({ ...existingUser, ...req.body });
+    })
+    .catch((err) => {
+      console.error(err);
+      if (err === 'RECORD_NOT_FOUND')
+        res.status(404).send(`User with id ${userId} not found.`);
+      else res.status(500).send('Error updating a user');
+    });
 });
 
 app.delete("/api/users/:id", (req, res) => {
